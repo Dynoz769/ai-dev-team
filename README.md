@@ -6,7 +6,7 @@ Your own virtual engineering team, powered by Claude. Give it a task. Six role a
 
 ## The AI Office
 
-The top of the dashboard is a live 3D office (three.js). Six chibi-style workers sit at their desks in a cosy dark office and show what they're actually doing. Drag to look around, scroll to zoom.
+The top of the dashboard is a live 3D office (three.js): two rows of desks with silver monitors and status panels, a meeting table in front, and six chibi-style workers (big heads, glossy black hair, big eyes, glasses) who show what they're actually doing. Drag to look around, scroll to zoom.
 
 | You see | It means |
 |---|---|
@@ -23,7 +23,7 @@ The top of the dashboard is a live 3D office (three.js). Six chibi-style workers
 
 Activity comes from what the agents are really doing: the app watches Claude's stream and sees which tool it's starting to use (for example `write_file public/rooms.html`), then shows the matching engineer at work. Paths that look like UI go to the Frontend Engineer, API/server/database paths to the Backend Engineer, and the rest to the Tech Lead.
 
-The office lives in `public/office3d.js`: characters are built from simple shapes, so you can change their look (skin, hair style, glasses, hoodie color) in the `LOOKS` table at the top.
+The office lives in `public/office3d.js`: characters are built from simple shapes, so you can change their look (skin, hair style, glasses, top color) in the `LOOKS` table at the top.
 
 ![Dashboard](docs/dashboard.png)
 
