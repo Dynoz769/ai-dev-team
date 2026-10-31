@@ -105,3 +105,5 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 @keyframes dot { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-4px); opacity: 1; } }
 .bubble .spin { display: inline-block; animation: spin 1.5s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 .bubble .wiggle { display: inline-block; animation: wiggle .5s ease-in-out infinite alternate; } @keyframes wiggle { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+.bubble .wave { display: inline-block; transform-origin: 70% 80%; animation: wave .35s ease-in-out infinite alternate; }
+@keyframes wave { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }

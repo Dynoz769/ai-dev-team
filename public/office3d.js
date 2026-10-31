@@ -653,6 +653,7 @@ export function createOffice3D(container, roles) {
 
     const bubbleEl = document.createElement("div");
     bubbleEl.className = "bubble3d";
+    bubbleEl.dataset.agent = r.id;
     bubbleEl.innerHTML = `<div class="bubble-anchor"><div class="bubble"></div></div>`;
     ch.anchor.add(new CSS2DObject(bubbleEl));
 
@@ -668,7 +669,8 @@ export function createOffice3D(container, roles) {
     const toDesk = [onRing(a), ...arc(a, angleOf(aisleFront)), aisleFront, aisleBack, deskPos];
 
     agents[r.id] = {
-      name: r.name, ch, desk, side, bubbleEl,
+      id: r.id, name: r.name, ch, desk, side, bubbleEl,
+      waveUntil: 0, waveTarget: null, waving: false,
       toTable, toDesk, seatFacing: Math.atan2(TABLE.x - seat.x, TABLE.z - seat.z),
       deskPos, aisleBack, deskNode: nearestNode(aisleBack), frontNode: nearestNode(aisleFront),
       tableTail: [ringIn, ...arc(angleOf(aisleFront), a), seat],
@@ -797,6 +799,19 @@ export function createOffice3D(container, roles) {
       P.headY = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(yaw), Math.cos(yaw))));
     }
 
+    // Waving at a colleague: right arm up, hand swinging, head turned to them.
+    if (ag.waving) {
+      P.shX[1] = -0.25;
+      P.shZ[1] = 2.45 + Math.sin(t * 13) * 0.35;
+      P.elX[1] = -0.35;
+      if (ag.waveTarget) {
+        tmp.copy(ag.waveTarget).sub(ch.root.position);
+        const yaw = Math.atan2(tmp.x, tmp.z) - ch.root.rotation.y;
+        P.headY = Math.max(-1.0, Math.min(1.0, Math.atan2(Math.sin(yaw), Math.cos(yaw))));
+        P.headX = -0.05;
+      }
+    }
+
     ch.legs.forEach((l, i) => { l.hip.rotation.x = lerp(l.hip.rotation.x, P.hipX[i], k); l.knee.rotation.x = lerp(l.knee.rotation.x, P.kneeX[i], k); });
     ch.arms.forEach((a, i) => {
       a.sh.rotation.x = lerp(a.sh.rotation.x, P.shX[i], k);
@@ -913,6 +928,7 @@ export function createOffice3D(container, roles) {
   function bubbleFor(ag) {
     const s = ag.state;
     if (s.talking) return ["bubble speech show", s.speech];
+    if (ag.waving) return ["bubble show", '<span class="wave">👋</span>'];
     if (s.mode === "thinking") return ["bubble thought show", '<span class="dots"><i></i><i></i><i></i></span>'];
     if (s.mode === "standby") return ["bubble show small", '<span class="dots"><i></i><i></i><i></i></span>'];
     if (ICONS[s.mode]) return ["bubble show", ICONS[s.mode]];
@@ -936,12 +952,42 @@ export function createOffice3D(container, roles) {
     }
   }
 
+  // ---------- waving hello ----------
+  const lastWave = new Map(); // "a|b" -> time they last waved at each other
+  const isFree = (ag) => ag.state.mode === "idle" && !ag.state.atTable;
+  function greetings(t) {
+    const list = Object.values(agents);
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], b = list[j];
+        if (!a.path.length && !b.path.length) continue; // someone has to be passing by
+        if (!isFree(a) || !isFree(b)) continue; // no waving while busy or heading to a meeting
+        if (a.ch.root.position.distanceTo(b.ch.root.position) > 2.1) continue;
+        const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+        if (t - (lastWave.get(key) ?? -99) < 12) continue;
+        lastWave.set(key, t);
+        for (const [me, other] of [[a, b], [b, a]]) {
+          me.waveUntil = t + 1.6;
+          me.waveTarget = other.ch.root.position;
+        }
+      }
+    }
+    for (const ag of list) {
+      const waving = t < ag.waveUntil;
+      if (waving !== ag.waving) {
+        ag.waving = waving;
+        refreshLabels(ag);
+      }
+    }
+  }
+
   function frame() {
     timer.update();
     const dt = Math.min(timer.getDelta(), 0.25); // time-based, so slow machines still move at the right speed
     const t = timer.getElapsed();
     let talker = null;
     for (const ag of Object.values(agents)) if (ag.at === "table" && ag.state.talking && !ag.path.length) talker = ag.ch.root.position;
+    greetings(t);
     for (const ag of Object.values(agents)) {
       ag.lookAt = talker;
       wanderTick(ag, t);

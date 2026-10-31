@@ -19,6 +19,7 @@ The top of the dashboard is a live 3D office (three.js): two rows of desks with 
 | 🧪 Progress bar and ✓ on screen | Running the tests |
 | `…` while looking at a colleague | Standing by while a teammate works |
 | Sipping coffee ☕ at the desk, or walking off to the coffee corner, bookshelves, whiteboard, window or sofa, or chatting with a free colleague 💬 | Free (free time; they head straight back when work or a meeting starts) |
+| 👋 Arm raised, head turned to a colleague | Two free workers passing each other say hi (each pair at most every ~12 seconds) |
 | Short huddle at the table | Build kickoff, or QA walking the engineers through what failed |
 
 Activity comes from what the agents are really doing: the app watches Claude's stream and sees which tool it's starting to use (for example `write_file public/rooms.html`), then shows the matching engineer at work. Paths that look like UI go to the Frontend Engineer, API/server/database paths to the Backend Engineer, and the rest to the Tech Lead.
