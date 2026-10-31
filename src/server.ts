@@ -10,6 +10,7 @@ await prepareWorkspace();
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
+app.use("/vendor/three", express.static("node_modules/three"));
 
 const info = () => ({
   model: config.mock ? "mock" : config.model,

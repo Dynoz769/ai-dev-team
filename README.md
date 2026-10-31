@@ -6,21 +6,24 @@ Your own virtual engineering team, powered by Claude. Give it a task. Six role a
 
 ## The AI Office
 
-The office at the top of the dashboard shows what each agent is doing, live:
+The top of the dashboard is a live 3D office (three.js). Six chibi-style workers sit at their desks in a cosy dark office and show what they're actually doing. Drag to look around, scroll to zoom.
 
 | You see | It means |
 |---|---|
-| Agents walk to the meeting table, nod, speech bubbles pop up | Discussing a task (bubbles show what they just said in the chat) |
-| 💭 Thought bubble | Waiting on Claude to decide what to say or do next |
-| 📝 Typing, document on screen | Product Lead writing the spec |
-| 📖 Code scrolling on screen | Reading or searching the code |
-| ⌨️ Fast typing, colored code lines | Editing files |
+| Workers get up and walk to the round table, nod, look at whoever is speaking, speech bubbles pop up | Discussing a task (bubbles show what they just said in the chat) |
+| 💭 Thought bubble, hand on chin | Waiting on Claude to decide what to say or do next |
+| 📝 Typing, a document filling in on screen | Product Lead writing the spec |
+| 📖 Reading, code scrolling on screen | Reading or searching the code |
+| ⌨️ Fast typing, colored code lines on screen | Editing files |
 | ⚙️ Terminal on screen | Running a command |
 | 🧪 Progress bar and ✓ on screen | Running the tests |
-| `…` at desk | Standing by while a teammate works |
+| `…` while looking at a colleague | Standing by while a teammate works |
+| Sipping coffee ☕ | Free |
 | Short huddle at the table | Build kickoff, or QA walking the engineers through what failed |
 
 Activity comes from what the agents are really doing: the app watches Claude's stream and sees which tool it's starting to use (for example `write_file public/rooms.html`), then shows the matching engineer at work. Paths that look like UI go to the Frontend Engineer, API/server/database paths to the Backend Engineer, and the rest to the Tech Lead.
+
+The office lives in `public/office3d.js`: characters are built from simple shapes, so you can change their look (skin, hair style, glasses, hoodie color) in the `LOOKS` table at the top.
 
 ![Dashboard](docs/dashboard.png)
 
@@ -97,6 +100,7 @@ src/
   store.ts      tasks and state, saved to data/db.json
   mock.ts       scripted agents for MOCK=1
 public/         the dashboard (plain HTML/CSS/JS, no build step)
+  office3d.js   the 3D office
 ```
 
 ## Configuration
