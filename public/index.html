@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Dev Team</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">AI</div><div><b>AI Dev Team</b><small>Your virtual engineering team</small></div></div>
+    <button class="primary wide" id="newTaskBtn">+ New Task</button>
+    <div class="side-section">
+      <div class="side-label">Workspace</div>
+      <div class="side-card"><span class="dot green"></span><div><b id="wsName">–</b><small id="wsPath"></small></div></div>
+      <div class="side-card"><span class="dot blue"></span><div><b>Model</b><small id="modelName">–</small></div></div>
+    </div>
+    <div class="usage">
+      <div class="row"><span>AI usage (this month)</span><span id="usagePct">0%</span></div>
+      <div class="bar"><div id="usageBar"></div></div>
+      <small id="usageText">$0 / $0</small>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <div><h1 id="greeting">Hello 👋</h1><small id="subtitle"></small></div>
+      <div class="banner" id="mockBanner" hidden>MOCK MODE: agents are scripted, no API calls</div>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head"><h2><span class="dot green pulse"></span> AI Office</h2><small id="officeStats"></small></div>
+      <div class="office" id="office"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Tasks</h2>
+        <div class="tabs" id="taskTabs">
+          <button data-filter="active" class="active">Active</button>
+          <button data-filter="done">Completed</button>
+        </div>
+      </div>
+      <div id="taskList" class="task-list"></div>
+    </section>
+  </main>
+
+  <aside class="detail" id="detail">
+    <div class="empty">Select a task, or create a new one.</div>
+  </aside>
+
+  <dialog id="newTask">
+    <form method="dialog" id="newTaskForm">
+      <h2>New task for the team</h2>
+      <label>Title<input name="title" required placeholder="e.g. Studio room combination" /></label>
+      <label>Description<textarea name="description" rows="6" placeholder="What should it do, for whom, and why? Any constraints?"></textarea></label>
+      <div class="actions">
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button class="primary" value="create">Start discussion</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
