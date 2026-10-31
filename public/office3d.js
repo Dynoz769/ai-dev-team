@@ -30,7 +30,7 @@ const LOOKS = {
   frontend: { skin: 0xefc6a2, hair: "messy", glasses: false, top: 0x202328, female: false },
   qa: { skin: 0xf2ccb0, hair: "long", glasses: true, top: 0x26272c, female: true },
 };
-const HAIR = 0x0b0b0c;
+const HAIR = 0x010101;
 
 // ---------- small helpers ----------
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...opts });
@@ -82,23 +82,23 @@ function buildRoom(scene) {
   const floor = canvasTexture(1024, 1024, (g, w, h) => {
     const tile = 128;
     for (let y = 0; y < h; y += tile) for (let x = 0; x < w; x += tile) {
-      const l = 17 + Math.random() * 4;
-      g.fillStyle = `hsl(220, 6%, ${l}%)`;
+      const l = 28 + Math.random() * 4;
+      g.fillStyle = `hsl(220, 4%, ${l}%)`;
       g.fillRect(x, y, tile, tile);
       for (let i = 0; i < 40; i++) {
         g.fillStyle = `rgba(255,255,255,${Math.random() * 0.03})`;
         g.fillRect(x + Math.random() * tile, y + Math.random() * tile, 2, 2);
       }
-      g.strokeStyle = "rgba(0,0,0,.45)"; g.lineWidth = 3; g.strokeRect(x, y, tile, tile);
+      g.strokeStyle = "rgba(0,0,0,.28)"; g.lineWidth = 3; g.strokeRect(x, y, tile, tile);
     }
   });
   floor.tex.wrapS = floor.tex.wrapT = THREE.RepeatWrapping;
   floor.tex.repeat.set(3, 2.2);
-  scene.add(mesh(new THREE.PlaneGeometry(24, 19), mat(0xffffff, { map: floor.tex, roughness: 0.45, metalness: 0.1 }), { rx: -PI / 2, z: 1.5, shadow: false }));
+  scene.add(mesh(new THREE.PlaneGeometry(24, 19), mat(0xffffff, { map: floor.tex, roughness: 0.32, metalness: 0.12 }), { rx: -PI / 2, z: 1.5, shadow: false }));
 
-  const wallMat = mat(0x24221f, { roughness: 0.85 });
-  scene.add(box(24, 5, 0.3, wallMat, { y: 2.5, z: -7.9 }));
-  scene.add(box(0.3, 5, 17, wallMat, { x: -12, y: 2.5, z: 0.5 }));
+  const wallMat = mat(0x3f3a35, { roughness: 0.85 });
+  scene.add(box(24, 8, 0.3, wallMat, { y: 4, z: -7.9 }));
+  scene.add(box(0.3, 8, 19, wallMat, { x: -12, y: 4, z: 1.5 }));
 
   // Back wall feature panel with sign and LED strip, like a reception wall.
   scene.add(box(8.5, 3.2, 0.12, mat(0x15161a, { roughness: 0.6 }), { y: 2.3, z: -7.68 }));
@@ -139,9 +139,9 @@ function buildRoom(scene) {
   scene.add(mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ map: glassText.tex, transparent: true }), { x: 11.42, y: 2.6, z: -3.5, ry: -PI / 2, shadow: false }));
 
   // Shelves with decor on both sides of the feature wall.
-  const shelfMat = mat(0x3a2d22);
+  const shelfMat = mat(0x7a5c42);
   for (const sx of [-7.6, 7.6]) {
-    scene.add(box(2.4, 3.8, 0.45, mat(0x1a1715), { x: sx, y: 1.9, z: -7.5 }));
+    scene.add(box(2.4, 3.8, 0.45, mat(0x4a3f35), { x: sx, y: 1.9, z: -7.5 }));
     for (let r = 0; r < 4; r++) {
       const y = 0.55 + r * 0.9;
       scene.add(box(2.2, 0.06, 0.4, shelfMat, { x: sx, y, z: -7.35 }));
@@ -201,7 +201,7 @@ function buildRoom(scene) {
 
   // Warm lights over desks and the table.
   for (const [x, z] of [...Object.values(DESKS), [TABLE.x, TABLE.z]]) {
-    const l = new THREE.PointLight(0xffcf96, x === 0 && z === TABLE.z ? 14 : 8, 6.5, 1.6);
+    const l = new THREE.PointLight(0xffd3a0, x === 0 && z === TABLE.z ? 22 : 16, 9, 1.5);
     l.position.set(x, 3.6, z + 0.8);
     scene.add(l);
   }
@@ -309,7 +309,7 @@ function buildMeetingTable(scene) {
     c.rotation.y = Math.atan2(-c.position.x, -c.position.z);
     g.add(c);
   }
-  scene.add(mesh(new THREE.CircleGeometry(3.4, 48), mat(0x2b2e36, { roughness: 1 }), { rx: -PI / 2, y: 0.01, x: TABLE.x, z: TABLE.z, shadow: false }));
+  scene.add(mesh(new THREE.CircleGeometry(3.4, 48), mat(0x3e4148, { roughness: 1 }), { rx: -PI / 2, y: 0.01, x: TABLE.x, z: TABLE.z, shadow: false }));
   g.position.copy(TABLE);
   scene.add(g);
 }
@@ -320,7 +320,7 @@ function buildMeetingTable(scene) {
 function buildCharacter(look) {
   const skin = mat(look.skin, { roughness: 0.55 });
   const skinShade = mat(new THREE.Color(look.skin).multiplyScalar(0.9), { roughness: 0.6 });
-  const hairM = new THREE.MeshPhysicalMaterial({ color: HAIR, roughness: 0.45, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.5 });
+  const hairM = new THREE.MeshPhysicalMaterial({ color: HAIR, roughness: 0.7, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.7, specularIntensity: 0.4 });
   const top = mat(look.top, { roughness: 0.85 });
   const topDark = mat(new THREE.Color(look.top).multiplyScalar(0.8), { roughness: 0.85 });
   const pants = mat(0x1d2027, { roughness: 0.9 });
@@ -522,8 +522,8 @@ function arc(fromAngle, toAngle) {
 // ---------- the office ----------
 export function createOffice3D(container, roles) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0d0e11);
-  scene.fog = new THREE.Fog(0x0d0e11, 26, 45);
+  scene.background = new THREE.Color(0x1e1c1a);
+  scene.fog = new THREE.Fog(0x1e1c1a, 30, 50);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   camera.position.set(0, 12.5, 17.5);
@@ -533,7 +533,7 @@ export function createOffice3D(container, roles) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.45;
+  renderer.toneMappingExposure = 1.4;
   container.appendChild(renderer.domElement);
 
   const labels = new CSS2DRenderer();
@@ -551,8 +551,8 @@ export function createOffice3D(container, roles) {
   controls.minAzimuthAngle = -0.9;
   controls.maxAzimuthAngle = 0.9;
 
-  scene.add(new THREE.HemisphereLight(0xe6e9ff, 0x4a3a2c, 1.5));
-  const sun = new THREE.DirectionalLight(0xfff0dd, 1.4);
+  scene.add(new THREE.HemisphereLight(0xf2f0ff, 0x5a4a3c, 1.7));
+  const sun = new THREE.DirectionalLight(0xfff0dd, 2.0);
   sun.position.set(-5, 15, 9);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -560,7 +560,7 @@ export function createOffice3D(container, roles) {
   sun.shadow.bias = -0.0005;
   scene.add(sun);
 
-  const fill = new THREE.DirectionalLight(0xffe6cc, 0.9); // soft light on the faces
+  const fill = new THREE.DirectionalLight(0xffe6cc, 1.3); // soft light on the faces
   fill.position.set(0, 6, 14);
   scene.add(fill);
 
