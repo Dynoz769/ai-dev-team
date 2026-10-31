@@ -11,7 +11,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 // ---------- layout ----------
 // Two rows of three desks facing the camera. [x, z] is where the worker sits.
 const DESKS = {
-  product: [-5, -5.6], design: [0, -5.6], techlead: [5, -5.6],
+  product: [-5, -6.0], design: [0, -6.0], techlead: [5, -6.0],
   backend: [-5, 0], frontend: [0, 0], qa: [5, 0],
 };
 const TABLE = new THREE.Vector3(0, 0, 5.8);
@@ -177,7 +177,7 @@ function buildRoom(scene) {
   wb.add(mesh(new THREE.PlaneGeometry(1.4, 1.75), new THREE.MeshStandardMaterial({ map: notes.tex, roughness: 0.6 }), { y: 2.1, z: 0.03 }));
   wb.add(box(1.5, 1.85, 0.05, mat(0xb08a62), { y: 2.1 }));
   for (const lx of [-0.6, 0.6]) wb.add(box(0.06, 2.6, 0.06, mat(0xb08a62), { x: lx, y: 1.3, z: -0.1 }));
-  wb.position.set(2.3, 0, -7.35);
+  wb.position.set(2.4, 0, -7.45);
   wb.rotation.y = -0.15;
   scene.add(wb);
 
@@ -221,7 +221,7 @@ function buildDesk(scene, x, z, side) {
 
   // Name panel on the desk front (drawn on a canvas, like a status display).
   const card = canvasTexture(640, 160, () => {});
-  g.add(mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: card.tex, transparent: true }), { y: 0.5, z: 1.47, shadow: false }));
+  g.add(mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: card.tex, transparent: true }), { y: 0.58, z: 1.47, shadow: false }));
 
   // Main all-in-one monitor in front of the worker (screen faces them, silver back to us).
   const imac = new THREE.Group();
@@ -526,7 +526,7 @@ export function createOffice3D(container, roles) {
   scene.fog = new THREE.Fog(0x0d0e11, 26, 45);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
-  camera.position.set(0, 11.2, 17.5);
+  camera.position.set(0, 12.5, 17.5);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -541,7 +541,7 @@ export function createOffice3D(container, roles) {
   container.appendChild(labels.domElement);
 
   const controls = new OrbitControls(camera, labels.domElement);
-  controls.target.set(0, 0.9, -0.6);
+  controls.target.set(0, 0.9, -0.9);
   controls.enableDamping = true;
   controls.enablePan = false;
   controls.minDistance = 7;
