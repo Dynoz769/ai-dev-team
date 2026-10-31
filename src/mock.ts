@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { Purpose } from "./llm.ts";
+import type { Purpose, OnToolStart } from "./llm.ts";
 
 /**
  * MOCK=1: scripted stand-in for Claude so you can click through the whole pipeline
@@ -9,6 +9,7 @@ import type { Purpose } from "./llm.ts";
 type Msg = Anthropic.Beta.Messages.BetaMessage;
 type Params = { system?: unknown; messages: Anthropic.Beta.Messages.BetaMessageParam[] };
 
+let qaRuns = 0;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function message(content: unknown[], stop: Msg["stop_reason"]): Msg {
@@ -36,8 +37,17 @@ const OPENERS: Record<string, string> = {
   "QA Engineer": "[mock] Edge cases: invalid input, overlapping times, and the empty case. Each requirement needs a test.",
 };
 
-export async function mockResponse(purpose: Purpose, params: Params): Promise<Msg> {
-  await sleep(400);
+export async function mockResponse(purpose: Purpose, params: Params, onToolStart?: OnToolStart): Promise<Msg> {
+  await sleep(purpose === "discuss" ? 2200 : 900);
+  const m = respond(purpose, params);
+  // Like the real stream: report the tool while it's "being written", then take a moment.
+  const call = m.content.find((b) => b.type === "tool_use");
+  if (call && call.type === "tool_use") onToolStart?.(call.name, call.input as Record<string, unknown>);
+  if (purpose !== "discuss") await sleep(call ? 1600 : 600);
+  return m;
+}
+
+function respond(purpose: Purpose, params: Params): Msg {
   const system = String(params.system ?? "");
   const turns = params.messages.length;
 
@@ -59,13 +69,26 @@ export async function mockResponse(purpose: Purpose, params: Params): Promise<Ms
   }
 
   if (purpose === "engineer") {
-    if (turns === 1) return tool("list_files", {});
-    if (turns === 3)
-      return tool("write_file", { path: "MOCK_CHANGE.md", content: "# Mock change\n\nWritten by the mock engineer to test the pipeline.\n" });
-    return text("[mock] Added MOCK_CHANGE.md. Nothing else changed.");
+    const steps = [
+      () => tool("list_files", {}),
+      () => tool("read_file", { path: "src/bookings.js" }),
+      () => tool("read_file", { path: "README.md" }),
+      () => tool("write_file", { path: "public/rooms.html", content: "<h1>Rooms</h1>\n<!-- mock frontend change -->\n" }),
+      () => tool("write_file", { path: "MOCK_CHANGE.md", content: "# Mock change\n\nWritten by the mock engineer to test the pipeline.\n" }),
+      () => tool("edit_file", { path: "README.md", old_text: "AI Dev Team.", new_text: "AI Dev Team. See MOCK_CHANGE.md." }),
+      () => tool("run_command", { command: "npm test" }),
+    ];
+    const isFix = JSON.stringify(params.messages[0].content).includes("QA rejected");
+    const i = (turns - 1) / 2;
+    if (isFix) return i === 0 ? tool("read_file", { path: "MOCK_CHANGE.md" }) : text("[mock] Fixed what QA reported.");
+    return i < steps.length ? steps[i]() : text("[mock] Added MOCK_CHANGE.md and linked it from the README.");
   }
 
-  // qa
+  // qa: rejects the first attempt so you can see the fix loop, then passes.
   if (turns === 1) return tool("run_command", { command: "git status --short" });
-  return text("[mock] MOCK_CHANGE.md is present and tests pass.\nVERDICT: PASS");
+  if (turns === 3) return tool("read_file", { path: "MOCK_CHANGE.md" });
+  qaRuns++;
+  return qaRuns % 2 === 1
+    ? text("[mock] MOCK_CHANGE.md doesn't say which task it belongs to.\nVERDICT: FAIL")
+    : text("[mock] Looks good now and tests pass.\nVERDICT: PASS");
 }

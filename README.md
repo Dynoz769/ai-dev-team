@@ -2,6 +2,26 @@
 
 Your own virtual engineering team, powered by Claude. Give it a task. Six role agents discuss it, you approve a spec, and then they code, test and fix it in your git repo until it's ready for you to review.
 
+![The AI Office](docs/office.gif)
+
+## The AI Office
+
+The office at the top of the dashboard shows what each agent is doing, live:
+
+| You see | It means |
+|---|---|
+| Agents walk to the meeting table, nod, speech bubbles pop up | Discussing a task (bubbles show what they just said in the chat) |
+| 💭 Thought bubble | Waiting on Claude to decide what to say or do next |
+| 📝 Typing, document on screen | Product Lead writing the spec |
+| 📖 Code scrolling on screen | Reading or searching the code |
+| ⌨️ Fast typing, colored code lines | Editing files |
+| ⚙️ Terminal on screen | Running a command |
+| 🧪 Progress bar and ✓ on screen | Running the tests |
+| `…` at desk | Standing by while a teammate works |
+| Short huddle at the table | Build kickoff, or QA walking the engineers through what failed |
+
+Activity comes from what the agents are really doing: the app watches Claude's stream and sees which tool it's starting to use (for example `write_file public/rooms.html`), then shows the matching engineer at work. Paths that look like UI go to the Frontend Engineer, API/server/database paths to the Backend Engineer, and the rest to the Tech Lead.
+
 ![Dashboard](docs/dashboard.png)
 
 ## How it works

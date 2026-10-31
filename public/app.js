@@ -65,6 +65,111 @@ async function api(path, body) {
   return data;
 }
 
+// ---------- the office scene ----------
+// Each agent has a desk (left/right columns) and a seat at the meeting table.
+const DESKS = { product: [11, 13], design: [11, 42], techlead: [11, 71], frontend: [89, 13], backend: [89, 42], qa: [89, 71] };
+const SEATS = { design: [36, 16], product: [50, 16], techlead: [64, 16], frontend: [36, 64], backend: [50, 64], qa: [64, 64] };
+const LOOKS = {
+  product: { skin: "#f1c27d", hair: "#3b2a20" }, design: { skin: "#e0ac69", hair: "#7a3b2e" }, techlead: { skin: "#c68642", hair: "#1c1c1c" },
+  frontend: { skin: "#ffdbac", hair: "#d9a441" }, backend: { skin: "#8d5524", hair: "#111" }, qa: { skin: "#f5d0b0", hair: "#4a4a4a" },
+};
+const MODE_ICON = { reading: "📖", coding: "⌨️", running: '<span class="spin">⚙️</span>', testing: "🧪", writing: '<span class="wiggle">📝</span>', idle: "☕" };
+const officeEls = {};
+const speech = {}; // role -> { text, until }
+let seenMessages = null;
+let speechTimer;
+
+function buildOffice() {
+  const office = $("#office");
+  for (const r of state.info.roles) {
+    const [dx, dy] = DESKS[r.id];
+    const look = LOOKS[r.id] ?? { skin: "#e0ac69", hair: "#222" };
+    const furn = document.createElement("div");
+    furn.className = "furn off";
+    furn.style.cssText = `left:${dx}%;top:${dy}%`;
+    furn.innerHTML = `<div class="surface"></div><div class="mug">☕</div><div class="monitor">
+      <div class="screen code"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="screen read"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="screen term">$ <b>▌</b></div>
+      <div class="screen test">✓✓✓<div class="prog"></div></div>
+      <div class="screen doc"><i></i><i></i><i></i><i></i></div></div>`;
+    const agent = document.createElement("div");
+    agent.className = "agent idle";
+    agent.style.cssText = `left:${dx}%;top:${dy}%;--shirt:${r.color};--skin:${look.skin};--hair:${look.hair}`;
+    agent.innerHTML = `<div class="bubble-anchor"><div class="bubble"></div></div>
+      <div class="person"><div class="glow"></div><div class="legs"><i></i><i></i></div><div class="arm l"></div><div class="arm r"></div>
+        <div class="torso"></div><div class="head"><div class="eyes"><i></i><i></i></div></div><div class="hair"></div></div>
+      <div class="tag"><b>${esc(r.name)}</b><small></small></div>`;
+    office.append(furn, agent);
+    officeEls[r.id] = { agent, furn, at: "desk" };
+  }
+}
+
+/** New chat messages from agents pop up as speech bubbles for a few seconds. */
+function collectSpeech() {
+  const all = state.tasks.flatMap((t) => t.messages);
+  if (!seenMessages) { seenMessages = new Set(all.map((m) => m.id)); return; }
+  for (const m of all) {
+    if (seenMessages.has(m.id)) continue;
+    seenMessages.add(m.id);
+    if (!officeEls[m.author]) continue;
+    const text = m.text.replace(/\s+/g, " ").replace(/^\[mock\] /, "");
+    speech[m.author] = { text: text.length > 110 ? text.slice(0, 107) + "…" : text, until: Date.now() + 6000 };
+  }
+  clearTimeout(speechTimer);
+  const next = Math.min(...Object.values(speech).map((s) => s.until).filter((u) => u > Date.now()));
+  if (Number.isFinite(next)) speechTimer = setTimeout(renderOffice, next - Date.now() + 50);
+}
+
+function renderOffice() {
+  if (!Object.keys(officeEls).length) buildOffice();
+  collectSpeech();
+  const taskByCode = Object.fromEntries(state.tasks.map((t) => [t.code, t]));
+  let meetingTask = null;
+
+  for (const r of state.info.roles) {
+    const a = state.agents[r.id] ?? { mode: "idle", activity: "Free", status: "idle" };
+    const el = officeEls[r.id];
+    const task = a.taskCode ? taskByCode[a.taskCode] : null;
+    const talking = speech[r.id]?.until > Date.now();
+    // At the table while meeting, and while thinking/talking during a discussion.
+    const atTable = a.mode === "meeting" || (task?.status === "discussing" && (a.mode === "thinking" || talking));
+    if (atTable && task) meetingTask = task;
+    const where = atTable ? "table" : "desk";
+    const [x, y] = atTable ? SEATS[r.id] : DESKS[r.id];
+
+    if (el.at !== where) {
+      el.at = where;
+      el.agent.classList.add("walking");
+      clearTimeout(el.walkTimer);
+      el.walkTimer = setTimeout(() => el.agent.classList.remove("walking"), 1400);
+    }
+    el.agent.style.left = `${x}%`;
+    el.agent.style.top = `${y}%`;
+    el.agent.className = `agent ${a.mode}${talking ? " talking" : ""}${el.agent.classList.contains("walking") ? " walking" : ""}`;
+    el.furn.className = `furn ${where === "desk" ? a.mode : "off"}`;
+
+    const bubble = $(".bubble", el.agent);
+    let html = "", cls = "bubble";
+    if (talking) { html = esc(speech[r.id].text); cls += " speech show"; }
+    else if (a.mode === "thinking") { html = '<span class="dots"><i></i><i></i><i></i></span>'; cls += " thought show"; }
+    else if (a.mode === "meeting") { html = ""; }
+    else if (a.mode === "standby") { html = '<span class="dots"><i></i><i></i><i></i></span>'; cls += " show"; }
+    else if (MODE_ICON[a.mode]) { html = MODE_ICON[a.mode]; cls += a.mode === "idle" ? "" : " show"; }
+    if (bubble.className !== cls) bubble.className = cls;
+    if (bubble.innerHTML !== html) bubble.innerHTML = html;
+
+    const label = talking ? "Talking" : a.mode === "idle" ? "Free" : a.activity;
+    const small = $(".tag small", el.agent);
+    small.textContent = label;
+    small.title = `${a.taskCode ? a.taskCode + " · " : ""}${a.activity}`;
+  }
+
+  const table = $(".meeting-table");
+  table.classList.toggle("active", !!meetingTask);
+  $("#tableLabel").textContent = meetingTask ? `${meetingTask.code} · ${meetingTask.title}` : "Meeting room";
+}
+
 // ---------- rendering ----------
 function render() {
   const { info, usage, tasks, agents } = state;
@@ -83,13 +188,7 @@ function render() {
 
   const working = info.roles.filter((r) => agents[r.id]?.status === "working").length;
   $("#officeStats").textContent = `${info.roles.length} agents · ${working} working · ${tasks.filter((t) => BUSY.includes(t.status)).length} tasks in progress`;
-  $("#office").innerHTML = info.roles.map((r) => {
-    const a = agents[r.id] ?? { status: "idle", activity: "Idle" };
-    return `<div class="desk ${a.status}">
-      <div class="avatar" style="background:${r.color}">${initials(r.name)}<span class="dot ${a.status === "working" ? "amber pulse" : "green"}"></span></div>
-      <div><b>${esc(r.name)}</b><small title="${esc(a.activity)}">${a.taskCode ? esc(a.taskCode) + " · " : ""}${esc(a.activity)}</small></div>
-    </div>`;
-  }).join("");
+  renderOffice();
 
   const list = tasks.filter((t) => (filter === "done") === DONE.includes(t.status));
   $("#taskList").innerHTML = list.length ? list.map((t) => `

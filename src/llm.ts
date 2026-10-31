@@ -12,15 +12,20 @@ let client: Anthropic | undefined;
 
 export class RefusalError extends Error {}
 
+/** Called while Claude is still writing a tool call, so the office can show who is doing what. */
+export type OnToolStart = (name: string, partialInput: Record<string, unknown>) => void;
+
 /**
  * One call to Claude. Every agent in the app goes through here so that model choice,
  * refusal fallback and the usage meter live in one place.
  */
-export async function callClaude(purpose: Purpose, params: Params): Promise<Anthropic.Beta.Messages.BetaMessage> {
-  if (config.mock) return mockResponse(purpose, params);
+export async function callClaude(purpose: Purpose, params: Params, onToolStart?: OnToolStart): Promise<Anthropic.Beta.Messages.BetaMessage> {
+  if (config.mock) return mockResponse(purpose, params, onToolStart);
 
   client ??= new Anthropic();
-  const message = await client.beta.messages
+  let currentTool = "";
+  let keysSeen = 0;
+  const stream = client.beta.messages
     .stream({
       model: config.model,
       max_tokens: 32000,
@@ -30,8 +35,27 @@ export async function callClaude(purpose: Purpose, params: Params): Promise<Anth
       // Caches the stable prefix (tools, system prompt, earlier turns) so long agent loops stay cheap.
       cache_control: { type: "ephemeral" },
       ...params,
-    })
-    .finalMessage();
+    });
+  if (onToolStart) {
+    stream.on("streamEvent", (ev) => {
+      if (ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
+        currentTool = ev.content_block.name;
+        keysSeen = 0;
+        onToolStart(currentTool, {});
+      }
+    });
+    // Report again each time a new field starts streaming: by the time `content` starts,
+    // `path` is complete, so the right engineer can be shown at work.
+    stream.on("inputJson", (_delta, snapshot) => {
+      const s = (snapshot ?? {}) as Record<string, unknown>;
+      const keys = Object.keys(s).length;
+      if (currentTool && keys > keysSeen) {
+        keysSeen = keys;
+        onToolStart(currentTool, s);
+      }
+    });
+  }
+  const message = await stream.finalMessage();
 
   recordUsage(message);
   if (message.stop_reason === "refusal") {

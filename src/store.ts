@@ -49,8 +49,21 @@ export interface Task {
   error?: string;
 }
 
+/** What an agent is doing right now. The dashboard animates each one differently. */
+export type AgentMode =
+  | "idle" // at desk, nothing to do
+  | "standby" // at desk, waiting for a teammate
+  | "meeting" // at the meeting table, listening
+  | "thinking" // waiting on Claude
+  | "writing" // writing the spec
+  | "reading" // reading/searching code
+  | "coding" // editing files
+  | "running" // running a command
+  | "testing"; // running the test suite
+
 export interface AgentState {
   status: "idle" | "working";
+  mode: AgentMode;
   activity: string;
   taskCode?: string;
 }
@@ -154,8 +167,9 @@ export const store = {
     changed();
   },
 
-  setAgent(role: RoleId, state: AgentState) {
-    agents[role] = state;
+  setAgent(role: RoleId, mode: AgentMode, activity: string, taskCode?: string) {
+    const status = mode === "idle" || mode === "standby" ? "idle" : "working";
+    agents[role] = { status, mode, activity, taskCode };
     changed();
   },
 

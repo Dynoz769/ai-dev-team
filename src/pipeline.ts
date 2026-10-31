@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.ts";
-import { store, type Task } from "./store.ts";
+import { store, type Task, type AgentMode } from "./store.ts";
 import { callClaude, textOf, type Purpose } from "./llm.ts";
 import { ROLES, role, discussionSystemPrompt, SPEC_SYSTEM_PROMPT, ENGINEER_SYSTEM_PROMPT, QA_SYSTEM_PROMPT, type RoleId } from "./agents.ts";
 import { engineerTools, qaTools, executeTool, run, shq } from "./tools.ts";
@@ -32,14 +32,40 @@ async function guarded(task: Task, fn: () => Promise<void>) {
     store.log(task, "system", `Error: ${msg}`);
     store.update(task, { status: "failed", error: msg });
   } finally {
-    for (const r of ROLES) store.setAgent(r.id, { status: "idle", activity: "Idle" });
+    for (const r of ROLES) store.setAgent(r.id, "idle", "Idle");
   }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Gather agents at the meeting table for a moment so the handoff is visible in the office. */
+async function huddle(task: Task, roles: RoleId[], topic: string, ms = 2500, stayAtTable = false) {
+  for (const r of roles) store.setAgent(r, "meeting", topic, task.code);
+  await sleep(ms);
+  if (!stayAtTable) for (const r of roles) store.setAgent(r, "standby", "Back at desk", task.code);
+}
+
+const ENGINEERS: RoleId[] = ["techlead", "frontend", "backend"];
+
+/** Which engineer "does" a tool call, so the office shows the right person at work. */
+function actorFor(roles: RoleId[], input: Record<string, unknown>): RoleId {
+  if (roles.length === 1) return roles[0];
+  const p = String(input.path ?? input.command ?? input.pattern ?? "").toLowerCase();
+  if (/(component|page|view|ui|style|\.css|\.tsx|\.jsx|\.vue|\.svelte|\.html|public|client|frontend)/.test(p)) return "frontend";
+  if (/(api|server|route|controller|service|model|schema|migration|db|sql|backend|src\/)/.test(p)) return "backend";
+  return "techlead";
+}
+
+function modeFor(tool: string, input: Record<string, unknown>): AgentMode {
+  if (tool === "write_file" || tool === "edit_file") return "coding";
+  if (tool === "run_command") return /\b(test|jest|vitest|pytest|mocha|spec)\b/.test(String(input.command)) ? "testing" : "running";
+  return "reading";
 }
 
 // ---------- Stage 1: discussion → spec ----------
 
 async function post(task: Task, r: RoleId, instruction: string, ctx: string) {
-  store.setAgent(r, { status: "working", activity: "Thinking…", taskCode: task.code });
+  store.setAgent(r, "thinking", "Thinking about what to say…", task.code);
   const m = await callClaude("discuss", {
     system: discussionSystemPrompt(role(r), ctx),
     output_config: { effort: "low" },
@@ -50,7 +76,7 @@ async function post(task: Task, r: RoleId, instruction: string, ctx: string) {
       },
     ],
   });
-  store.setAgent(r, { status: "idle", activity: "Waiting", taskCode: task.code });
+  store.setAgent(r, "meeting", "Listening", task.code);
   const text = textOf(m);
   if (text && text.trim().toUpperCase() !== "PASS") store.addMessage(task, r, text);
 }
@@ -59,6 +85,7 @@ export function discuss(task: Task) {
   return guarded(task, async () => {
     store.update(task, { status: "discussing", error: undefined });
     const ctx = await projectContext();
+    await huddle(task, ROLES.map((r) => r.id), `Meeting: ${task.title}`, 1500, true);
 
     for (const r of ROLES) {
       await post(task, r.id, `Post your opening take as the ${role(r.id).name}.`, ctx);
@@ -78,7 +105,8 @@ export function discuss(task: Task) {
 
 async function writeSpec(task: Task, ctx?: string) {
   ctx ??= await projectContext();
-  store.setAgent("product", { status: "working", activity: "Writing spec…", taskCode: task.code });
+  for (const r of ROLES) if (r.id !== "product") store.setAgent(r.id, "standby", "Waiting for the spec", task.code);
+  store.setAgent("product", "writing", "Writing the spec", task.code);
   const m = await callClaude("spec", {
     system: `${SPEC_SYSTEM_PROMPT}\n\n${ctx}`,
     output_config: {
@@ -114,6 +142,7 @@ export function reviseSpec(task: Task) {
   return guarded(task, async () => {
     store.update(task, { status: "discussing", error: undefined });
     const ctx = await projectContext();
+    await huddle(task, ["product", "techlead"], "Going over your feedback", 1500, true);
     await post(task, "techlead", "The owner just replied. If it changes anything technical, say how in 1-3 sentences. Otherwise reply with exactly: PASS", ctx);
     await writeSpec(task, ctx);
   });
@@ -134,12 +163,17 @@ async function agentLoop(task: Task, opts: {
   const messages: MessageParam[] = [{ role: "user", content: opts.prompt }];
 
   for (let step = 0; step < config.maxAgentSteps; step++) {
-    const m = await callClaude(opts.purpose, {
-      system: opts.system,
-      tools: opts.tools,
-      output_config: { effort: opts.effort },
-      messages,
-    });
+    for (const r of opts.roles.slice(1)) store.setAgent(r, "standby", "Standing by", task.code);
+    store.setAgent(author, "thinking", step === 0 ? "Planning the work" : "Deciding the next step", task.code);
+    const m = await callClaude(
+      opts.purpose,
+      { system: opts.system, tools: opts.tools, output_config: { effort: opts.effort }, messages },
+      (tool, input) => {
+        const actor = actorFor(opts.roles, input);
+        for (const r of opts.roles) if (r !== actor) store.setAgent(r, "standby", "Standing by", task.code);
+        store.setAgent(actor, modeFor(tool, input), describeCall(tool, input), task.code);
+      },
+    );
     messages.push({ role: "assistant", content: m.content });
 
     if (m.stop_reason === "pause_turn") continue;
@@ -156,7 +190,9 @@ async function agentLoop(task: Task, opts: {
     for (const call of calls) {
       const input = (call.input ?? {}) as Record<string, unknown>;
       const summary = describeCall(call.name, input);
-      for (const r of opts.roles) store.setAgent(r, { status: "working", activity: summary, taskCode: task.code });
+      const actor = actorFor(opts.roles, input);
+      for (const r of opts.roles) if (r !== actor) store.setAgent(r, "standby", "Standing by", task.code);
+      store.setAgent(actor, modeFor(call.name, input), summary, task.code);
       try {
         const out = await executeTool(call.name, input, opts.allowWrites);
         store.log(task, author, `${summary}\n${out}`);
@@ -203,6 +239,7 @@ async function doBuild(task: Task) {
   await git(`checkout -b ${branch} ${base}`);
   store.update(task, { branch, baseBranch: base, diff: undefined, testOutput: undefined });
   store.addMessage(task, "techlead", `Spec approved. Working on branch \`${branch}\`.`);
+  await huddle(task, [...ENGINEERS, "qa"], "Kickoff: planning the build");
 
   try {
     let feedback = "";
@@ -217,7 +254,7 @@ async function doBuild(task: Task) {
           : `${taskBlock(task)}\n\nApproved spec:\n${task.spec}\n\nImplement it.`,
         tools: engineerTools,
         allowWrites: true,
-        roles: ["techlead", "frontend", "backend"],
+        roles: ENGINEERS,
         effort: "high",
       });
       store.addMessage(task, "techlead", summary || "Implementation done.");
@@ -226,7 +263,8 @@ async function doBuild(task: Task) {
       store.update(task, { status: "testing" });
       let testOutput = "";
       if (config.testCommand) {
-        store.setAgent("qa", { status: "working", activity: `$ ${config.testCommand}`, taskCode: task.code });
+        for (const r of ENGINEERS) store.setAgent(r, "standby", "Waiting for QA", task.code);
+        store.setAgent("qa", "testing", `$ ${config.testCommand}`, task.code);
         const t = await run(config.testCommand);
         testOutput = `$ ${config.testCommand}\nexit code ${t.code}\n${t.output}`;
         store.log(task, "qa", testOutput);
@@ -250,6 +288,7 @@ async function doBuild(task: Task) {
         break;
       }
       feedback = report;
+      await huddle(task, [...ENGINEERS, "qa"], "QA walking the team through the issues");
     }
   } finally {
     // Always leave the repo clean and back on the base branch, keeping the work on the task branch.
