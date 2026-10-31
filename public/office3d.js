@@ -181,6 +181,21 @@ function buildRoom(scene) {
   wb.rotation.y = -0.15;
   scene.add(wb);
 
+  // Coffee corner at the front left.
+  const counterTop = mat(0x8a6446, { roughness: 0.45 });
+  scene.add(box(0.9, 0.95, 2.0, mat(0x2a2622, { roughness: 0.7 }), { x: -8.30, y: 0.475, z: 4.6 }));
+  scene.add(box(0.95, 0.06, 2.05, counterTop, { x: -8.30, y: 0.98, z: 4.6 }));
+  scene.add(box(0.38, 0.55, 0.42, mat(0x151515, { metalness: 0.4, roughness: 0.35 }), { x: -8.40, y: 1.29, z: 4.1 })); // machine
+  scene.add(box(0.06, 0.2, 0.3, mat(0xc9ccd2, { metalness: 0.8 }), { x: -8.19, y: 1.35, z: 4.1 }));
+  scene.add(sph(0.025, new THREE.MeshBasicMaterial({ color: 0x3ccf8e }), { x: -8.19, y: 1.5, z: 4.0, shadow: false }, 8));
+  for (let i = 0; i < 3; i++) scene.add(cyl(0.06, 0.05, 0.12, mat(0xf2efe9), { x: -8.25, y: 1.07, z: 4.75 + i * 0.16 }, 12));
+  const cp = plant(-8.35, 5.35, 0.35);
+  cp.position.y = 1.0;
+  scene.add(cp);
+  const coffeeLight = new THREE.PointLight(0xffd3a0, 5, 4, 2);
+  coffeeLight.position.set(-7.6, 2.6, 4.6);
+  scene.add(coffeeLight);
+
   // Lounge corner at the front right.
   const sofaMat = mat(0x8d8f94, { roughness: 0.95 });
   const sofa = new THREE.Group();
@@ -519,6 +534,59 @@ function arc(fromAngle, toAngle) {
   return pts;
 }
 
+// ---------- free time: walkways and places to visit ----------
+// Lanes the workers walk along so they never cut through desks or furniture.
+const LANES_X = [-8.6, -2.5, 2.5, 8.6];
+const LANES_Z = [-6.85, -2.6, AISLE_Z];
+const NODES = LANES_X.flatMap((x) => LANES_Z.map((z) => new THREE.Vector3(x, 0, z)));
+const LINKS = NODES.map((n, i) =>
+  NODES.flatMap((m, j) => {
+    if (i === j || (m.x !== n.x && m.z !== n.z)) return [];
+    const between = NODES.some((o, k) => k !== i && k !== j && (m.x === n.x
+      ? o.x === n.x && (o.z - n.z) * (o.z - m.z) < 0
+      : o.z === n.z && (o.x - n.x) * (o.x - m.x) < 0));
+    return between ? [] : [j];
+  }),
+);
+const nearestNode = (p) => NODES.reduce((best, n, i) => (n.distanceTo(p) < NODES[best].distanceTo(p) ? i : best), 0);
+/** Shortest walk between two lane crossings (tiny graph, plain Dijkstra). */
+function lanePath(from, to) {
+  const dist = NODES.map(() => Infinity), prev = NODES.map(() => -1), done = new Set();
+  dist[from] = 0;
+  while (done.size < NODES.length) {
+    let u = -1;
+    for (let i = 0; i < NODES.length; i++) if (!done.has(i) && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0 || dist[u] === Infinity || u === to) break;
+    done.add(u);
+    for (const v of LINKS[u]) {
+      const d = dist[u] + NODES[u].distanceTo(NODES[v]);
+      if (d < dist[v]) { dist[v] = d; prev[v] = u; }
+    }
+  }
+  const path = [];
+  for (let v = to; v >= 0; v = prev[v]) path.unshift(NODES[v].clone());
+  return path;
+}
+
+const SOFA_FACING = -PI / 2.4;
+// Where free workers like to go. `via` are extra steps between the lane and the spot.
+const SPOTS = [
+  { id: "coffee", at: [-7.3, 4.55], face: -PI / 2, pose: "sip", icon: "☕", label: "Getting coffee", via: [[-7.2, 3.3]] },
+  { id: "shelfL", at: [-7.6, -6.85], face: PI, pose: "look", icon: "📚", label: "Browsing books" },
+  { id: "shelfR", at: [7.6, -6.85], face: PI, pose: "look", icon: "📚", label: "Browsing books" },
+  { id: "board", at: [2.4, -6.85], face: PI, pose: "look", icon: "🗒️", label: "Checking the board" },
+  { id: "window", at: [10.4, -4.2], face: PI / 2, pose: "stand", icon: "🌆", label: "Looking outside" },
+  { id: "sofa", at: [9.5, 3.63], face: SOFA_FACING, pose: "sit", icon: "🛋️", label: "Taking a break", via: [[8.7, 3.85]] },
+  { id: "chatA", at: [-0.55, -2.6], face: PI / 2, pose: "chat", icon: "💬", label: "Chatting" },
+  { id: "chatB", at: [0.55, -2.6], face: -PI / 2, pose: "chat", icon: "💬", label: "Chatting" },
+].map((sp) => {
+  const pos = new THREE.Vector3(sp.at[0], 0, sp.at[1]);
+  const via = (sp.via ?? []).map(([x, z]) => new THREE.Vector3(x, 0, z));
+  return { ...sp, pos, via, node: nearestNode(via[0] ?? pos), takenBy: null };
+});
+const spot = (id) => SPOTS.find((sp) => sp.id === id);
+const rand = (a, b) => a + Math.random() * (b - a);
+
 // ---------- the office ----------
 export function createOffice3D(container, roles) {
   const scene = new THREE.Scene();
@@ -602,6 +670,9 @@ export function createOffice3D(container, roles) {
     agents[r.id] = {
       name: r.name, ch, desk, side, bubbleEl,
       toTable, toDesk, seatFacing: Math.atan2(TABLE.x - seat.x, TABLE.z - seat.z),
+      deskPos, aisleBack, deskNode: nearestNode(aisleBack), frontNode: nearestNode(aisleFront),
+      tableTail: [ringIn, ...arc(angleOf(aisleFront), a), seat],
+      spot: null, arrived: false, nextWander: null,
       at: "desk", path: [], facing: 0,
       state: { mode: "idle", activity: "", label: "Free", talking: false, speech: "", atTable: false },
       phase: Math.random() * 10,
@@ -637,6 +708,44 @@ export function createOffice3D(container, roles) {
       P.shX = [-Math.sin(w) * 0.45, Math.sin(w) * 0.45];
       P.elX = [-0.3, -0.3];
       P.bob = Math.abs(Math.sin(w)) * 0.06;
+    } else if (ag.at === "wander" && ag.spot) {
+      const pose = ag.spot.pose;
+      const sway = Math.sin(t * 0.6 + ag.phase);
+      if (pose === "sit") {
+        P.hipX = [-PI / 2, -PI / 2];
+        P.kneeX = [PI / 2, PI / 2];
+        P.bodyY = -0.1;
+        const sip = (t + ag.phase) % 6 < 1.5;
+        P.shX = [-0.5, sip ? -1.3 : -0.7];
+        P.elX = [-0.5, sip ? -2.1 : -1.2];
+        P.headX = sip ? -0.15 : 0.05;
+        P.headY = sway * 0.4;
+        mug = true;
+      } else if (pose === "sip") {
+        const sip = (t + ag.phase) % 4 < 1.4;
+        P.shX = [0.05, sip ? -1.3 : -0.6];
+        P.elX = [-0.1, sip ? -2.1 : -1.5];
+        P.headX = sip ? -0.15 : 0.05;
+        P.headY = sway * 0.3;
+        mug = true;
+      } else if (pose === "look") {
+        P.shX = [-0.2, -1.0];
+        P.elX = [-0.3, -2.25];
+        P.shZ = [0.15, 0.15];
+        P.headX = -0.12 + Math.sin(t * 0.5 + ag.phase) * 0.1;
+        P.headY = Math.sin(t * 0.35 + ag.phase) * 0.35;
+      } else if (pose === "chat") {
+        const mine = Math.sin(t * 0.7 + (ag.spot.id === "chatA" ? 0 : PI)) > 0; // take turns talking
+        ag.chatting = mine;
+        P.shX = mine ? [-0.4, -0.6 + Math.sin(t * 4) * 0.4] : [0.05, 0.05];
+        P.elX = mine ? [-0.6, -1.2 + Math.sin(t * 5) * 0.3] : [-0.2, -0.2];
+        P.shZ = mine ? [0.2, -0.4] : [0.1, -0.1];
+        P.headX = mine ? Math.sin(t * 6) * 0.05 : 0.05 + Math.max(0, Math.sin(t * 2.2)) * 0.1;
+      } else {
+        P.shX = [0.1, 0.1];
+        P.headY = sway * 0.5;
+        P.headX = -0.05;
+      }
     } else {
       P.hipX = [-PI / 2, -PI / 2];
       P.kneeX = [PI / 2, PI / 2];
@@ -702,7 +811,8 @@ export function createOffice3D(container, roles) {
     ch.mug.visible = mug;
     const blink = (t + ag.phase) % 4.2 < 0.12;
     ch.eyes.scale.y = lerp(ch.eyes.scale.y, blink ? 0.1 : 1, 0.6);
-    ch.mouth.scale.y = state.talking ? 1 + Math.abs(Math.sin(t * 14)) * 1.6 : 1;
+    const talkingNow = state.talking || (ag.at === "wander" && !walking && ag.spot?.pose === "chat" && ag.chatting);
+    ch.mouth.scale.y = talkingNow ? 1 + Math.abs(Math.sin(t * 14)) * 1.6 : 1;
   }
 
   function step(ag, dt) {
@@ -720,11 +830,110 @@ export function createOffice3D(container, roles) {
         root.position.addScaledVector(tmp, speed);
         ag.facing = Math.atan2(tmp.x, tmp.z);
       }
-      if (!ag.path.length) ag.facing = ag.at === "table" ? ag.seatFacing : 0;
+      if (!ag.path.length) ag.facing = ag.at === "table" ? ag.seatFacing : ag.at === "wander" && ag.spot ? ag.spot.face : 0;
     }
     let diff = ag.facing - root.rotation.y;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     root.rotation.y += diff * Math.min(1, dt * 8);
+  }
+
+  // ---------- free time ----------
+  const herePos = (ag) => ag.ch.root.position;
+  function releaseSpot(ag) {
+    if (ag.spot) ag.spot.takenBy = null;
+    ag.spot = null;
+    ag.arrived = false;
+  }
+  function pickSpot(ag) {
+    const free = SPOTS.filter((sp) => !sp.takenBy);
+    const chatA = spot("chatA"), chatB = spot("chatB");
+    // Join a colleague who's waiting to chat.
+    if (chatA.takenBy && !chatB.takenBy && Math.random() < 0.8) return chatB;
+    const others = Object.values(agents).filter((o) => o !== ag && o.at === "desk" && o.state.mode === "idle" && !o.state.atTable);
+    const options = free.filter((sp) => sp.id !== "chatB" && (sp.id !== "chatA" || others.length > 0));
+    return options[Math.floor(Math.random() * options.length)] ?? null;
+  }
+  function startWander(ag, t) {
+    const sp = pickSpot(ag);
+    if (!sp) { ag.nextWander = t + rand(5, 10); return; }
+    sp.takenBy = ag;
+    ag.spot = sp;
+    ag.arrived = false;
+    ag.at = "wander";
+    ag.path = [ag.aisleBack.clone(), ...lanePath(ag.deskNode, sp.node), ...sp.via.map((v) => v.clone()), sp.pos.clone()];
+    refreshLabels(ag);
+    // Someone heading to chat: nudge another free colleague to come over soon.
+    if (sp.id === "chatA") {
+      const other = Object.values(agents).find((o) => o !== ag && o.at === "desk" && o.state.mode === "idle" && !o.state.atTable);
+      if (other) other.nextWander = t + rand(0.5, 2);
+    }
+  }
+  function walkBackToDesk(ag) {
+    const from = ag.arrived && ag.spot ? [...ag.spot.via.slice().reverse().map((v) => v.clone())] : [];
+    const startNode = ag.arrived && ag.spot ? ag.spot.node : nearestNode(herePos(ag));
+    releaseSpot(ag);
+    ag.at = "desk";
+    ag.nextWander = null;
+    ag.path = [...from, ...lanePath(startNode, ag.deskNode), ag.aisleBack.clone(), ag.deskPos.clone()];
+    refreshLabels(ag);
+  }
+  function walkToTableFromHere(ag) {
+    const startNode = ag.arrived && ag.spot ? ag.spot.node : nearestNode(herePos(ag));
+    const from = ag.arrived && ag.spot ? ag.spot.via.slice().reverse().map((v) => v.clone()) : [];
+    releaseSpot(ag);
+    ag.at = "table";
+    ag.path = [...from, ...lanePath(startNode, ag.frontNode), ...ag.tableTail.map((p) => p.clone())];
+  }
+  function wanderTick(ag, t) {
+    const free = ag.state.mode === "idle" && !ag.state.atTable;
+    if (ag.at === "desk") {
+      if (!free || ag.path.length) { ag.nextWander = null; return; }
+      const wandering = Object.values(agents).filter((o) => o.at === "wander").length;
+      if (ag.nextWander === null) ag.nextWander = t + rand(4, 18);
+      else if (t >= ag.nextWander) {
+        if (wandering >= 3) ag.nextWander = t + rand(4, 10); // keep some people at their desks
+        else startWander(ag, t);
+      }
+    } else if (ag.at === "wander") {
+      if (!ag.path.length && !ag.arrived) {
+        ag.arrived = true;
+        ag.leaveAt = t + (ag.spot.pose === "chat" ? rand(10, 16) : rand(7, 14));
+        refreshLabels(ag);
+      }
+      // A chat ends when the other person leaves.
+      if (ag.arrived && ag.spot?.pose === "chat") {
+        const partner = spot(ag.spot.id === "chatA" ? "chatB" : "chatA").takenBy;
+        if (!partner && t > ag.leaveAt - 6) ag.leaveAt = Math.min(ag.leaveAt, t + 1);
+        if (partner && partner.leaveAt) ag.leaveAt = Math.max(ag.leaveAt, partner.arrived ? partner.leaveAt : ag.leaveAt);
+      }
+      if (ag.arrived && t >= ag.leaveAt) walkBackToDesk(ag);
+    }
+  }
+
+  function bubbleFor(ag) {
+    const s = ag.state;
+    if (s.talking) return ["bubble speech show", s.speech];
+    if (s.mode === "thinking") return ["bubble thought show", '<span class="dots"><i></i><i></i><i></i></span>'];
+    if (s.mode === "standby") return ["bubble show small", '<span class="dots"><i></i><i></i><i></i></span>'];
+    if (ICONS[s.mode]) return ["bubble show", ICONS[s.mode]];
+    if (ag.at === "wander" && ag.arrived && ag.spot) return ["bubble show", ag.spot.icon];
+    return ["bubble", ""];
+  }
+  function refreshLabels(ag) {
+    const s = ag.state;
+    const bubble = ag.bubbleEl.querySelector(".bubble");
+    const [cls, html] = bubbleFor(ag);
+    if (bubble.className !== cls) bubble.className = cls;
+    if (bubble.innerHTML !== html) bubble.innerHTML = html;
+
+    const busy = !(s.mode === "idle" || s.mode === "standby");
+    let label = s.atTable && !s.talking && s.mode !== "thinking" ? "In a meeting" : s.label;
+    if (ag.at === "wander" && ag.spot) label = ag.arrived ? `Free · ${ag.spot.label}` : "Free · Stretching legs";
+    const key = `${label}|${busy}`;
+    if (ag.desk.cardKey !== key) {
+      ag.desk.cardKey = key;
+      drawCard(ag.desk.card, ag.name, label, busy);
+    }
   }
 
   function frame() {
@@ -735,6 +944,7 @@ export function createOffice3D(container, roles) {
     for (const ag of Object.values(agents)) if (ag.at === "table" && ag.state.talking && !ag.path.length) talker = ag.ch.root.position;
     for (const ag of Object.values(agents)) {
       ag.lookAt = talker;
+      wanderTick(ag, t);
       step(ag, dt);
       setPose(ag, dt, t);
       if (t - ag.lastScreen > 0.1) {
@@ -758,26 +968,17 @@ export function createOffice3D(container, roles) {
       if (!ag) continue;
       ag.state = s;
       const want = s.atTable ? "table" : "desk";
-      if (ag.at !== want) {
+      if (ag.at === "wander") {
+        // Work or a meeting interrupts free time: head straight there.
+        if (want === "table") walkToTableFromHere(ag);
+        else if (s.mode !== "idle") walkBackToDesk(ag);
+      } else if (ag.at !== want) {
+        const midWalk = ag.path.length > 0;
         ag.at = want;
-        ag.path = (want === "table" ? ag.toTable : ag.toDesk).map((p) => p.clone());
+        if (want === "table") ag.path = midWalk ? [...lanePath(nearestNode(herePos(ag)), ag.frontNode), ...ag.tableTail.map((p) => p.clone())] : ag.toTable.map((p) => p.clone());
+        else ag.path = ag.toDesk.map((p) => p.clone());
       }
-      const bubble = ag.bubbleEl.querySelector(".bubble");
-      let html = "", cls = "bubble";
-      if (s.talking) { html = s.speech; cls += " speech show"; }
-      else if (s.mode === "thinking") { html = '<span class="dots"><i></i><i></i><i></i></span>'; cls += " thought show"; }
-      else if (s.mode === "standby") { html = '<span class="dots"><i></i><i></i><i></i></span>'; cls += " show small"; }
-      else if (ICONS[s.mode]) { html = ICONS[s.mode]; cls += " show"; }
-      if (bubble.className !== cls) bubble.className = cls;
-      if (bubble.innerHTML !== html) bubble.innerHTML = html;
-
-      const busy = !(s.mode === "idle" || s.mode === "standby");
-      const label = s.atTable && !s.talking && s.mode !== "thinking" ? "In a meeting" : s.label;
-      const key = `${label}|${busy}`;
-      if (ag.desk.cardKey !== key) {
-        ag.desk.cardKey = key;
-        drawCard(ag.desk.card, ag.name, label, busy);
-      }
+      refreshLabels(ag);
     }
     tableLabelEl.textContent = meetingTitle || "";
     tableLabel.visible = !!meetingTitle; // CSS2DRenderer controls display itself
