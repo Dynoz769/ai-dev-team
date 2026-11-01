@@ -9,9 +9,14 @@ export const config = {
   port: Number(env.PORT || 3000),
   model: env.MODEL || "claude-opus-5-5",
   workspaceDir: env.WORKSPACE_DIR ? path.resolve(env.WORKSPACE_DIR) : "",
+  /** True when the app fell back to the built-in demo project. */
+  usingDemo: false,
+  /** Shown in Settings when the configured project folder couldn't be used. */
+  workspaceWarning: "",
   testCommand: env.TEST_COMMAND ?? "",
   monthlyBudgetUsd: Number(env.MONTHLY_BUDGET_USD || 500),
-  mock: env.MOCK === "1",
+  // Practice mode (scripted agents, no API calls): on when asked for, or when there's no API key yet.
+  mock: env.MOCK === "1" || (env.MOCK !== "0" && !env.ANTHROPIC_API_KEY),
   dataDir: path.resolve("data"),
   /** How many times QA can send failing work back to the engineers before giving up. */
   maxFixRounds: Number(env.MAX_FIX_ROUNDS || 3),

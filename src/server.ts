@@ -4,6 +4,7 @@ import { store, events } from "./store.ts";
 import { ROLES } from "./agents.ts";
 import { prepareWorkspace } from "./workspace.ts";
 import { discuss, reviseSpec, build, merge, reject, retry } from "./pipeline.ts";
+import { getSettings, saveSettings } from "./settings.ts";
 
 await prepareWorkspace();
 
@@ -18,10 +19,18 @@ const info = () => ({
   testCommand: config.testCommand,
   budgetUsd: config.monthlyBudgetUsd,
   mock: config.mock,
+  usingDemo: config.usingDemo,
+  warning: config.workspaceWarning,
   roles: ROLES,
 });
 
 app.get("/api/state", (_req, res) => res.json({ ...store.snapshot(), info: info() }));
+
+app.get("/api/settings", (_req, res) => res.json(getSettings()));
+app.post("/api/settings", async (req, res) => {
+  const result = await saveSettings(req.body ?? {});
+  res.status("error" in result ? 400 : 200).json(result);
+});
 
 // Live updates: the dashboard re-renders from each snapshot.
 app.get("/api/events", (req, res) => {
@@ -97,6 +106,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // Agents can run shell commands in your repo, so only listen on this machine unless told otherwise.
 const host = process.env.HOST || "127.0.0.1";
 app.listen(config.port, host, () => {
-  console.log(`AI Dev Team running at http://${host === "0.0.0.0" ? "localhost" : host}:${config.port}`);
-  console.log(`Workspace: ${config.workspaceDir}${config.mock ? "  (MOCK mode: no API calls)" : ""}`);
+  console.log(`\n  AI Dev Team is running: open http://localhost:${config.port} in your browser.`);
+  console.log(`  Keep this window open while you use it. Press Ctrl+C to stop.\n`);
+  console.log(`  Project: ${config.usingDemo ? "demo project" : config.workspaceDir}${config.mock ? "   (practice mode: no API calls)" : ""}\n`);
 });

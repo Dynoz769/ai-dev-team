@@ -129,7 +129,7 @@ function render() {
   const active = tasks.filter((t) => !DONE.includes(t.status));
   $("#subtitle").textContent = `Your AI team has ${active.length} active task${active.length === 1 ? "" : "s"}`;
   $("#mockBanner").hidden = !info.mock;
-  $("#wsName").textContent = info.workspace.split("/").pop();
+  $("#wsName").textContent = info.usingDemo ? "Demo project" : info.workspace.split(/[\\/]/).pop();
   $("#wsPath").textContent = info.testCommand ? `tests: ${info.testCommand}` : "no test command";
   $("#modelName").textContent = info.model;
   const pct = Math.min(100, Math.round((usage.costUsd / info.budgetUsd) * 100));
@@ -228,6 +228,83 @@ document.addEventListener("click", (e) => {
 });
 
 $("#newTaskBtn").onclick = () => $("#newTask").showModal();
+
+// ---------- settings ----------
+const settingsForm = $("#settingsForm");
+async function openSettings() {
+  const st = await (await fetch("/api/settings")).json();
+  const f = settingsForm.elements;
+  f.apiKey.value = "";
+  f.apiKey.placeholder = st.hasKey ? `Saved (${st.keyHint}). Paste a new key to replace it.` : "sk-ant-…";
+  f.workspaceDir.value = st.workspaceDir || "";
+  f.testCommand.value = st.usingDemo && !st.workspaceDir ? "" : st.testCommand || "";
+  f.model.value = st.model;
+  f.practice.checked = st.practice;
+  $("#settingsIntro").textContent = !st.hasKey
+    ? "Welcome! You're in practice mode, so you can look around for free. To have real AI workers build your project, paste your API key and choose your project folder."
+    : st.usingDemo ? "Your API key is set. Choose your project folder so the team works on your code instead of the demo." : "";
+  showSettingsError(st.warning || "");
+  $("#initGitBtn").hidden = true;
+  $("#settings").showModal();
+}
+function showSettingsError(msg, ok = false) {
+  const el = $("#settingsError");
+  el.hidden = !msg;
+  el.textContent = msg;
+  el.className = ok ? "ok" : "error";
+}
+async function saveSettings(initGit = false) {
+  const f = settingsForm.elements;
+  const body = {
+    workspaceDir: f.workspaceDir.value,
+    model: f.model.value,
+    practice: f.practice.checked,
+    initGit,
+  };
+  if (f.apiKey.value.trim()) {
+    body.apiKey = f.apiKey.value.trim();
+    if (f.practice.checked && !initGit) body.practice = false; // adding a key means they want the real thing
+  }
+  if (f.testCommand.value.trim() || f.workspaceDir.value.trim() === "") body.testCommand = f.testCommand.value;
+  $("#settingsSave").disabled = true;
+  $("#settingsSave").textContent = body.apiKey ? "Checking key…" : "Saving…";
+  try {
+    const res = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.error) {
+      showSettingsError(data.error);
+      $("#initGitBtn").hidden = !data.needsGit;
+      return;
+    }
+    $("#initGitBtn").hidden = true;
+    const st = await (await fetch("/api/settings")).json();
+    f.apiKey.value = "";
+    f.apiKey.placeholder = st.hasKey ? `Saved (${st.keyHint}). Paste a new key to replace it.` : "sk-ant-…";
+    f.workspaceDir.value = st.workspaceDir || "";
+    f.testCommand.value = st.usingDemo && !st.workspaceDir ? "" : st.testCommand || "";
+    f.practice.checked = st.practice;
+    showSettingsError(
+      st.practice ? "Saved. You're still in practice mode (untick it to use real AI workers)."
+        : `Saved. Real AI workers are ready${st.usingDemo ? " (on the demo project)" : ` on ${st.workspaceDir}`}. Create a task to start!`,
+      true,
+    );
+  } finally {
+    $("#settingsSave").disabled = false;
+    $("#settingsSave").textContent = "Save";
+  }
+}
+$("#settingsBtn").onclick = openSettings;
+$("#mockBanner").onclick = openSettings;
+$("#settingsCancel").onclick = () => $("#settings").close();
+$("#initGitBtn").onclick = () => saveSettings(true);
+settingsForm.onsubmit = (e) => { e.preventDefault(); saveSettings(); };
+// First visit: show the welcome/settings screen once.
+fetch("/api/settings").then((r) => r.json()).then((st) => {
+  if (!st.hasKey && !localStorage.getItem("aiDevTeamWelcomed")) {
+    localStorage.setItem("aiDevTeamWelcomed", "1");
+    openSettings();
+  }
+});
 $("#newTaskForm").onsubmit = async (e) => {
   if (e.submitter?.value !== "create") return;
   const f = new FormData(e.target);

@@ -40,34 +40,36 @@ The office lives in `public/office3d.js`: characters are built from simple shape
 
 Nothing is pushed anywhere. Everything stays in your local repo.
 
-## Quick start
+## Quick start (no coding needed)
 
-Requires Node.js 22+ and git.
+1. **Install Node.js** (the "LTS" version) from https://nodejs.org, and **Git** from https://git-scm.com (on a Mac, the start file offers to install Git for you).
+2. **Download this project:** [Download ZIP](https://github.com/Dynoz769/ai-dev-team/archive/refs/heads/main.zip), then unzip it.
+3. **Double-click the start file** in the unzipped folder:
+   - Windows: `Start AI Dev Team (Windows).bat`
+   - Mac: `Start AI Dev Team (Mac).command` (the first time, right-click it → **Open** → **Open**, because macOS blocks downloaded files by default)
+   - Linux: `./start-linux.sh`
+
+   The first start installs everything (about a minute), then your browser opens at http://localhost:3000. Keep the black window open while you use the app.
+4. **Look around in practice mode.** It's free: the workers are scripted and nothing is charged. Click **+ New Task** to see the whole flow.
+5. **Switch to real AI workers:** click **⚙ Settings**, then:
+   - paste your API key from https://console.anthropic.com/settings/keys (you need to add some credit there first)
+   - enter the full path of your project folder (if it isn't using git yet, click **Set up git for this folder**)
+   - click **Save**. The app checks your key and switches to real workers.
+
+To update later, download the ZIP again (or `git pull`), keeping your `.env` file, which holds your settings.
+
+### For developers
 
 ```bash
+git clone https://github.com/Dynoz769/ai-dev-team && cd ai-dev-team
 npm install
-cp .env.example .env
+npm start          # practice mode until an API key is set
+MOCK=1 npm start   # force practice mode
 ```
 
-Try it without an API key first (scripted fake agents on a small demo repo):
+Settings are stored in `.env` (see `.env.example`); the Settings screen edits the same file.
 
-```bash
-MOCK=1 npm start
-```
-
-Open http://localhost:3000.
-
-Then use it for real. Edit `.env`:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-WORKSPACE_DIR=/absolute/path/to/your/project
-TEST_COMMAND=npm test
-```
-
-and run `npm start`. If you leave `WORKSPACE_DIR` empty, the team works on a demo repo in `data/demo-workspace`.
-
-Your repo must have **no uncommitted changes** when a build starts, and git needs your `user.name`/`user.email` configured.
+Before each build the project must have **no uncommitted changes**, so commit or stash your own work first. If git has no name/email configured, the team commits as "AI Dev Team".
 
 ## Tips
 
@@ -116,4 +118,4 @@ public/         the dashboard (plain HTML/CSS/JS, no build step)
 | `MAX_AGENT_STEPS` | `60` | Tool calls per coding/QA session |
 | `MONTHLY_BUDGET_USD` | `500` | For the usage meter |
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | Where the dashboard listens |
-| `MOCK` | `0` | `1` = fake agents, no API calls |
+| `MOCK` | empty | `1` = practice mode (scripted agents, no API calls). Empty = practice mode until an API key is set |

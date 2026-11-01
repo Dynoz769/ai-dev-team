@@ -12,6 +12,11 @@ let client: Anthropic | undefined;
 
 export class RefusalError extends Error {}
 
+/** Forget the cached client, e.g. after the API key changes in Settings. */
+export function resetClient() {
+  client = undefined;
+}
+
 /** Called while Claude is still writing a tool call, so the office can show who is doing what. */
 export type OnToolStart = (name: string, partialInput: Record<string, unknown>) => void;
 

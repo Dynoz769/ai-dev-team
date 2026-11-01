@@ -107,3 +107,16 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 .bubble .wiggle { display: inline-block; animation: wiggle .5s ease-in-out infinite alternate; } @keyframes wiggle { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
 .bubble .wave { display: inline-block; transform-origin: 70% 80%; animation: wave .35s ease-in-out infinite alternate; }
 @keyframes wave { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+
+/* Settings */
+#settingsBtn { margin-top: -8px; }
+button.banner { cursor: pointer; font: inherit; font-size: 12px; }
+#settings { width: 560px; }
+#settings select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px; margin-top: 6px; }
+#settings small { margin-top: 5px; line-height: 1.4; }
+#settings a { color: #9fb5ff; }
+#settings .intro { color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+#settings label.check { display: flex; gap: 8px; align-items: center; color: var(--text); }
+#settings label.check input { width: auto; margin: 0; }
+#settings .error { margin: 14px 0 0; }
+#settings .ok { background: #12291f; border: 1px solid #1f5a3d; color: #9de2bf; padding: 10px; border-radius: 8px; margin-top: 14px; font-size: 12px; }

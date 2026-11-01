@@ -9,6 +9,13 @@ export async function git(args: string, allowFail = false): Promise<string> {
   return output;
 }
 
+/** Commit/merge as the user if git knows who they are, otherwise as "AI Dev Team" (fresh installs have no identity). */
+export async function authorFlags(): Promise<string> {
+  const email = (await git("config user.email", true)).trim();
+  const name = (await git("config user.name", true)).trim();
+  return email && name ? "" : `-c user.name="AI Dev Team" -c user.email=ai-dev-team@example.com `;
+}
+
 /**
  * What the agents know about the project: its file list, README and any agent/contributor notes.
  * Goes in the system prompt, so it stays identical between calls and gets cached.
@@ -26,14 +33,19 @@ export async function projectContext(): Promise<string> {
 
 /** Checks the configured repo, or creates a small demo repo so the app can be tried right away. */
 export async function prepareWorkspace() {
+  config.workspaceWarning = "";
+  config.usingDemo = false;
   if (config.workspaceDir) {
-    if (!fs.existsSync(path.join(config.workspaceDir, ".git"))) {
-      throw new Error(`WORKSPACE_DIR (${config.workspaceDir}) is not a git repository.`);
-    }
-    return;
+    if (fs.existsSync(path.join(config.workspaceDir, ".git"))) return;
+    // Don't crash on a bad folder: fall back to the demo and say why in Settings.
+    config.workspaceWarning = fs.existsSync(config.workspaceDir)
+      ? `${config.workspaceDir} isn't set up for git yet. Open Settings to fix it.`
+      : `Folder not found: ${config.workspaceDir}. Open Settings to choose another.`;
+    console.warn(config.workspaceWarning + " Using the demo project for now.");
   }
   const dir = path.join(config.dataDir, "demo-workspace");
   config.workspaceDir = dir;
+  config.usingDemo = true;
   if (!config.testCommand) config.testCommand = "npm test";
   if (fs.existsSync(path.join(dir, ".git"))) return;
 

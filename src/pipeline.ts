@@ -4,7 +4,7 @@ import { store, type Task, type AgentMode } from "./store.ts";
 import { callClaude, textOf, type Purpose } from "./llm.ts";
 import { ROLES, role, discussionSystemPrompt, SPEC_SYSTEM_PROMPT, ENGINEER_SYSTEM_PROMPT, QA_SYSTEM_PROMPT, type RoleId } from "./agents.ts";
 import { engineerTools, qaTools, executeTool, run, shq } from "./tools.ts";
-import { git, projectContext } from "./workspace.ts";
+import { git, projectContext, authorFlags } from "./workspace.ts";
 
 type MessageParam = Anthropic.Beta.Messages.BetaMessageParam;
 
@@ -294,7 +294,7 @@ async function doBuild(task: Task) {
     // Always leave the repo clean and back on the base branch, keeping the work on the task branch.
     await git("add -A");
     if ((await git("status --porcelain")).trim()) {
-      await git(`commit -m ${shq(`${task.code}: ${task.title}`)} -m ${shq("Implemented by AI Dev Team.")}`);
+      await git(`${await authorFlags()}commit -m ${shq(`${task.code}: ${task.title}`)} -m ${shq("Implemented by AI Dev Team.")}`);
     }
     await git(`checkout ${base}`);
   }
@@ -309,7 +309,7 @@ export async function merge(task: Task) {
   const dirty = (await git("status --porcelain")).trim();
   if (dirty) throw new Error("The workspace has uncommitted changes; commit or stash them first.");
   await git(`checkout ${task.baseBranch}`);
-  await git(`merge --no-ff ${task.branch} -m ${shq(`Merge ${task.code}: ${task.title}`)}`);
+  await git(`${await authorFlags()}merge --no-ff ${task.branch} -m ${shq(`Merge ${task.code}: ${task.title}`)}`);
   store.update(task, { status: "merged" });
   store.addMessage(task, "system", `Merged \`${task.branch}\` into \`${task.baseBranch}\`.`);
 }
